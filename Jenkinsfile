@@ -19,6 +19,7 @@ pipeline {
 
     stage('Prepare Dependencies') {
       steps {
+             sh 'mkdir -p bootstrap/cache'
              sh 'composer install'
              sh 'php artisan migrate'
              sh 'php artisan db:seed'

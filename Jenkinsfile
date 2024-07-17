@@ -23,12 +23,6 @@ pipeline {
             }
         }
 
-        stage('Execute Unit Tests') {
-            steps {
-                sh './vendor/bin/phpunit'
-            }
-        }
-
         // Add a stage for deployment or provisioning
         stage('Deploy') {
             steps {
@@ -37,5 +31,12 @@ pipeline {
                 sh 'php artisan key:generate'
             }
         }
+
+        stage('Execute Unit Tests') {
+            steps {
+                sh './vendor/bin/phpunit'
+            }
+        }
+        
     }
 }

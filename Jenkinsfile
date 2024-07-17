@@ -67,5 +67,34 @@ pipeline {
             }
         }
 
+
+        stage ('Upload Artifact to Artifactory') {
+            steps {
+                script { 
+                    def server = Artifactory.server 'artifactory-server'                 
+                    def uploadSpec = """{
+                        "files": [
+                        {
+                        "pattern": "php-todo.zip",
+                        "target": "<name-of-artifact-repository>/php-todo",
+                        "props": "type=zip;status=ready"
+
+                        }
+                        ]
+                    }""" 
+                    println "Upload Spec: ${uploadSpec}"
+                        try {
+                                server.upload spec: uploadSpec
+                                println "Upload successful"
+                        } catch (Exception e) {
+                                println "Upload failed: ${e.message}"
+                        }
+                }
+            }
+
+        }
+
+
+
     }
 }

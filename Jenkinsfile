@@ -54,66 +54,45 @@ pipeline {
             }
         }
 
-        stage('SonarQube Quality Gate') {
-            when {
-                expression {
-                    def branchName = env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
-                    echo "Current branch: ${branchName}"
-                    return branchName ==~ /^(develop|hotfix|release|main|master)$/
-                }
+        stage('Package Artifact') {
+            steps {
+                sh 'zip -qr php-todo.zip ${WORKSPACE}/*'
+                archiveArtifacts artifacts: 'php-todo.zip', allowEmptyArchive: false
             }
+        }
+
+        stage('SonarQube Quality Gate') {
+            when { branch pattern: "^develop*|^hotfix*|^release*|^main*", comparator: "REGEXP" }
             environment {
-            scannerHome = tool 'SonarQubeScanner'
+                scannerHome = tool 'SonarQubeScanner'
             }
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    sh "${scannerHome}/bin/sonar-scanner"
+                    sh "${scannerHome}/bin/sonar-scanner -Dproject.settings=sonar-project.properties"
                 }
                 timeout(time: 1, unit: 'MINUTES') {
-                    script {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            echo "Quality Gate failed: ${qg.status}"
-                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                        } else {
-                            echo "Quality Gate passed: ${qg.status}"
-                        }
-                    }
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
-
-        stage('Package Artifact') {
-            steps {
-                sh 'zip -qr php-todo.zip ${WORKSPACE}/* ${WORKSPACE}/.[!.]*'
-            }
-        }
-
-        stage('Upload Artifact to Artifactory') {
+    
+        stage('Upload to Artifactory') {
             steps {
                 script {
-                    def server = Artifactory.server('Artifactory')
+                    def server = Artifactory.server 'my-artifactory-server'
                     def uploadSpec = """{
                         "files": [
-                          {
-                            "pattern": "php-todo.zip",
-                            "target": "todo-php-repo/",
-                            "props": "type=zip;status=ready"
-                          }
+                            {
+                                "pattern": "php-todo.zip",
+                                "target": "libs-release-local/php-todo/${env.BUILD_NUMBER}/"
+                            }
                         ]
                     }"""
-                    println "Upload Spec: ${uploadSpec}"
-                    try {
-                        server.upload spec: uploadSpec
-                        println "Upload successful"
-                    } catch (Exception e) {
-                        println "Upload failed: ${e.message}"
-                    }
+                    server.upload(uploadSpec)
                 }
             }
         }
-
-       stage ('Deploy to Dev Environment') {
+        stage ('Deploy to Dev Environment') {
             agent { label 'slave_one' }
             steps {
                 build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'dev']], propagate: false, wait: true

@@ -80,40 +80,41 @@ pipeline {
         }
 
 
-        stage ('Upload Artifact to Artifactory') {
+        stage('Upload to Artifactory') {
             steps {
-                script { 
-                    def server = Artifactory.server 'artifactory-server'                 
+                script {
+                    def server = Artifactory.server 'my-artifactory-server'
                     def uploadSpec = """{
                         "files": [
-                        {
-                        "pattern": "php-todo.zip",
-                        "target": "todo-dev-local/",
-                        "props": "type=zip;status=ready"
-
-                        }
+                            {
+                                "pattern": "php-todo.zip",
+                                "target": "libs-release-local/php-todo/${env.BUILD_NUMBER}/"
+                            }
                         ]
-                    }""" 
-                    println "Upload Spec: ${uploadSpec}"
-                        try {
-                                server.upload spec: uploadSpec
-                                println "Upload successful"
-                        } catch (Exception e) {
-                                println "Upload failed: ${e.message}"
-                        }
+                    }"""
+                    server.upload(uploadSpec)
                 }
             }
-
         }
-
-
         stage ('Deploy to Dev Environment') {
+            agent { label 'slave_one' }
             steps {
                 build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'dev']], propagate: false, wait: true
             }
         }
 
+        stage ('Deploy to Test Environment') {
+            agent { label 'slave_two' } 
+            steps {
+                build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'pentest']], propagate: false, wait: true
+            }
+        }
 
-
+        stage ('Deploy to Production Environment') {
+            agent any
+            steps {
+                build job: 'ansible-config-mgt/main', parameters: [[$class: 'StringParameterValue', name: 'env', value: 'ci']], propagate: false, wait: true
+            }
+        }
     }
 }
